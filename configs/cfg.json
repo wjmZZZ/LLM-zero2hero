@@ -5,7 +5,7 @@
   },
 
   "DatasetArguments": {
-    "train_data_dir": "./data/sharegpt_gpt4.jsonl",
+    "train_data_dir": "./data/sharegpt_zh_38K.json",
     "valid_data_dir": "./data/new_valid.json",
     "valid_strategy": "auto",
     "valid_size": 0.01,

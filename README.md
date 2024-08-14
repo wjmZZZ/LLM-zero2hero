@@ -16,6 +16,7 @@ LLM-zero2hero是一个高度解耦的大语言模型(LLM)微调项目，支持�
 LLM-zero2hero/
 ├── scripts/        # 运行脚本
 ├── configs/        # 配置文件（实验前配置）
+├── data/           # 数据部分
 └── src/            # 源代码目录
     ├── Main.py     # 入口文件
     ├── Args.py     # 参数配置
@@ -27,6 +28,8 @@ LLM-zero2hero/
     ├── Utils/      # 工具包
     └── Others/     # 运行相关杂项
 ```
+
+
 
 ## 快速开始
 
@@ -69,6 +72,37 @@ pip install -r requirements.txt
 
 ```bash
 sh scripts/llm.sh
+```
+
+
+
+## 数据格式
+
+目前支持shareGPT格式的对话数据
+
+```json
+[
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": ""
+      },
+      {
+        "from": "gpt",
+        "value": ""
+      }
+    ],
+  }
+]
+```
+
+可参考 `shibing624/sharegpt_gpt4` 数据仓库，使用 [huggingface镜像](https://hf-mirror.com/) 下载数据
+
+```sh
+cd LLM-zero2hero
+export HF_ENDPOINT=https://hf-mirror.com
+huggingface-cli download --repo-type dataset --resume-download shibing624/sharegpt_gpt4 --local-dir data
 ```
 
 
