@@ -5,7 +5,6 @@ config_file="./configs/cfg.json"
 
 # Specify the number of GPUs in the script
 num_gpus=1
-num_nodes=1
 
 
 # Check if the file exists
@@ -29,7 +28,7 @@ if [ "$use_deepspeed" = "True" ]; then
     run_command="deepspeed --include localhost:$gpu_list --master_port 15555 src/Main.py $config_file"
     echo "Running with DeepSpeed"
 elif [ "$num_gpus" -gt 1 ]; then
-    run_command="CUDA_VISIBLE_DEVICES=$gpu_list torchrun --nproc_per_node=$num_nodes --master_port=15200 src/Main.py $config_file"
+    run_command="CUDA_VISIBLE_DEVICES=$gpu_list torchrun --nproc_per_node=$num_gpus --master_port=15200 src/Main.py $config_file"
     echo "Running in multi-GPU distributed mode"
 else
     run_command="CUDA_VISIBLE_DEVICES=0 python src/Main.py $config_file"
