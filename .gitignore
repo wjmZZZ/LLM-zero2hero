@@ -12,4 +12,4 @@ ENV/
 
 .DS_Store
 *.ipynb
-*.json
+/configs/.ipynb_checkpoints

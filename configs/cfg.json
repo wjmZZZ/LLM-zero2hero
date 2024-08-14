@@ -1,0 +1,66 @@
+{
+  "ExperimentArguments": {
+    "experiment_name": "llm-zero2hero",
+    "output_dir": "./outputs"
+  },
+
+  "DatasetArguments": {
+    "train_data_dir": "./data/sharegpt_gpt4.jsonl",
+    "valid_data_dir": "./data/new_valid.json",
+    "valid_strategy": "auto",
+    "valid_size": 0.01,
+
+    "system_column": null,
+    "prompt_column": "prompt", 
+    "answer_column": "response",
+
+    "system_prefix": "<|im_start|>system\n",
+    "system_defalut": "You are a helpful assistant.",
+    "system_suffix": "<|im_end|>\n",
+
+    "prompt_prefix": "<|im_start|>user\n",
+    "prompt_suffix": "<|im_end|>\n<|im_start|>assistant\n",
+
+    "response_prefix": "",
+    "response_suffix": "<|im_end|>\n"
+  },
+
+  
+  "ModelArguments": {
+    "llm_backbone": "./ckpt/Qwen2-1.5B-Instruct",
+    "backbone_dtype":"bfloat16",
+    "use_pretrained_model":true, 
+    "intermediate_dropout":0.1,
+    "trust_remote_code": true
+  },
+
+  "TrainingArguments": {
+    "lora": false,
+    "use_dora": false,
+    "learning_rate": 0.0001,
+    "batch_size": 2,
+    "max_seq_length":512,
+    "num_train_epochs": 1,
+    "save_checkpoint":"best",
+    "num_validations_per_epoch":3,
+    "use_flash_attention_2": false,
+    "loss_function":"TokenAveragedCrossEntropyLoss",
+    "optimizer": "AdamW",
+    "schedule": "Cosine",
+    "warmup_epochs": 0.0,
+    "gradient_checkpointing":false,
+    "evaluate_before_training": false
+  },
+
+  "InferenceArguments": {
+    "metric": "BLEU"
+  },
+
+  "EnvironmentArguments": {
+    "seed": 42,
+    "use_deepspeed": false,
+    "deepspeed_method": "ZeRO2",
+    "compile_model": false,
+    "mixed_precision": true
+  }
+}
