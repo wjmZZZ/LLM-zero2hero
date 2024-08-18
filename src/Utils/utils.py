@@ -5,6 +5,7 @@ import random
 
 import numpy as np
 import torch
+import wandb
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,7 @@ class LocalRankFilter(logging.Filter):
         return local_rank == 0
 
 
-def get_logger(log_file_name=None):
+def get_logger(args):
     """
     Configure and get a logger instance.
 
@@ -94,13 +95,42 @@ def get_logger(log_file_name=None):
     logger.addHandler(console_handler)
 
     # File log handler
-    if log_file_name is not None:
-        file_handler = logging.FileHandler(filename=log_file_name)
+    if args.exp_args.log_file_name is not None:
+        file_handler = logging.FileHandler(filename=args.exp_args.log_file_name)
         file_handler.setFormatter(file_formatter)
         file_handler.addFilter(local_rank_filter)  # Add local rank filter
         logger.addHandler(file_handler)
 
+    # WandB log handler
+    if args.exp_args.use_wandb:
+        if int(os.getenv("LOCAL_RANK", 0)) == 0:  # Initialize W&B only in the main process
+            wandb_handler = WandbHandler(args)
+            wandb_handler.setFormatter(file_formatter)
+            logger.addHandler(wandb_handler)        
     return logger
+
+
+class WandbHandler(logging.Handler):
+    def __init__(self, args):
+        super().__init__()
+        self.args = args
+        self.logger = None
+        self.setup_wandb()
+
+    def setup_wandb(self):
+        if wandb.run is None:
+            self.logger = wandb.init(
+                entity=self.args.exp_args.wandb_entity,            
+                project=self.args.exp_args.wandb_project,
+                name=self.args.exp_args.wandb_name,
+                config=vars(self.args),
+            )
+        else:
+            self.logger = wandb.run
+
+    def emit(self, record):
+        msg = self.format(record)
+        self.logger.log({"log": msg, "level": record.levelname})
 
 
 class TqdmTologger(io.StringIO):

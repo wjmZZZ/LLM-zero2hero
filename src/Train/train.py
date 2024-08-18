@@ -1,6 +1,7 @@
 import logging
 from textwrap import dedent
 from typing import Any, Tuple
+import wandb
 
 import numpy as np
 import pandas as pd
@@ -122,7 +123,14 @@ def LLM_train(
                     )
                 )
             losses.append(loss.item())
-
+            
+            if args.exp_args.use_wandb and args.env_args._local_rank == 0:
+                wandb.log({
+                    "train/loss": loss.item(),
+                    "train/learning_rate": scheduler.get_last_lr()[0],
+                    "train/step": args.env_args._curr_step
+                })
+                
             if args.training_args.grad_accumulation != 1:
                 loss = loss / args.training_args.grad_accumulation
 
@@ -187,6 +195,13 @@ def LLM_train(
                 valid_loss, valid_metric = LLM_eval(
                     args, model, valid_dataloader, valid_data, metric_func
                 )
+
+                if args.exp_args.use_wandb and args.env_args._local_rank == 0:
+                    wandb.log({
+                        "valid/loss": valid_loss,
+                        "valid/metric": valid_metric,
+                        "valid/step": args.env_args._curr_step
+                    })
 
                 if args.training_args.save_checkpoint == "best":
                     if objective_op(valid_metric, best_valid_metric):

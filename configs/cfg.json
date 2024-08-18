@@ -1,12 +1,15 @@
 {
   "ExperimentArguments": {
     "experiment_name": "llm-zero2hero",
-    "output_dir": "./outputs"
+    "sub_experiment_name": "",
+    "output_dir": "./outputs",
+    "use_wandb": true,
+    "wandb_entity": ""
   },
 
   "DatasetArguments": {
-    "train_data_dir": "./data/sharegpt_zh_38K.json",
-    "valid_data_dir": "./data/new_valid.json",
+    "train_data_dir": "./data/sharegpt_zh_38K_format.jsonl",
+    "valid_data_dir": "",
     "valid_strategy": "auto",
     "valid_size": 0.01,
 

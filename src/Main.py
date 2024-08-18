@@ -18,17 +18,20 @@ from Train.metric import get_metric
 from Train.optimizer import get_optimizer
 from Train.train import LLM_train
 from Train.train_utils import calculate_steps, compile_model
+from Utils.utils import get_logger
 
 logger = logging.getLogger(__name__)
 
 
 def main():
     # Load arguments
-    logger.info("🚀 Loading arguments")
     exp_args, data_args, model_args, training_args, infer_args, env_args = get_args()
     args = Arguments(
         exp_args, data_args, model_args, training_args, infer_args, env_args
     )
+
+    logger = get_logger(args)
+    logger.info("🚀 Loading arguments")
 
     # Configure environment
     Prepare_environment(args)

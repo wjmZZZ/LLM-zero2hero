@@ -11,8 +11,8 @@ import torch
 import yaml
 from transformers import HfArgumentParser
 
-from Others.exceptions import DataException
 from Utils.utils import flatten_dict, get_logger
+from Others.exceptions import ArgumentException, DataException
 
 
 # ===================================================================================
@@ -72,18 +72,32 @@ class ExperimentArguments:
     Experiment configuration, including basic information and path settings for the current experiment
     """
 
-    experiment_name: str = "experiment"
+    experiment_name: str = "llm-zero2hero"
     sub_experiment_name: str = ""
     experiment_description: str = ""
 
     output_dir: str = "./outputs"
     log_file_name: str = "log.log"
+    use_wandb: bool = False
+    
+    wandb_entity: str = ""
+    wandb_project: str = ""
+    wandb_name: str = ""
+
 
     def __post_init__(self):
         os.makedirs(self.output_dir, exist_ok=True)
         exp_output_dir = os.path.join(self.output_dir, self.experiment_name)
         os.makedirs(exp_output_dir, exist_ok=True)
         self.log_file_name = os.path.join(exp_output_dir, self.log_file_name)
+        
+        if self.use_wandb and not self.wandb_entity:
+            raise ArgumentException("wandb_entity must be provided when use_wandb is True")
+        if self.use_wandb and self.wandb_project == '':           
+            self.wandb_project = self.experiment_name
+        if self.use_wandb and self.wandb_name == '':             
+            self.wandb_name = self.experiment_name
+            
 
         # If there is a sub-experiment
         if self.sub_experiment_name:
@@ -96,7 +110,7 @@ class ExperimentArguments:
             )
             os.makedirs(sub_exp_dir, exist_ok=True)
             self.log_file_name = os.path.join(sub_exp_dir, self.log_file_name)
-
+        
         self.output_dir = exp_output_dir
 
 
@@ -265,12 +279,21 @@ class Arguments:
     infer_args: InferenceArguments
     env_args: EnvironmentArguments
 
-    debug: bool = True
+    debug: bool = False
 
     def __post_init__(self):
         table = self.table_beauty()
-        logger = get_logger(self.exp_args.log_file_name)
+        logger = get_logger(self)
         logger.info("\n" + table)
+        
+        if self.exp_args.use_wandb and self.exp_args.wandb_project == self.exp_args.experiment_name:
+            logger.warning("wandb_project is set to experiment_name. It is recommended to set a specific wandb_project for better management and differentiation of experiments.")              
+           
+        if self.exp_args.use_wandb and self.exp_args.wandb_name == self.exp_args.experiment_name:
+            logger.warning("wandb_name is set to experiment_name. It is recommended to set a specific wandb_name for better management and differentiation of experiments.")    
+
+        if self.debug:
+            logger.debug("🔥🔥 Debug mode is enabled. Detailed debug information will be logged. 🔥🔥")
 
     def table_beauty(self):
         """

@@ -17,6 +17,9 @@ class CustomException(Exception):
         )
         super().__init__(f"{color_code}{formatted_message}{reset_code}")
 
+class ArgumentException(CustomException):
+    def __init__(self, message):
+        super().__init__(message, exception_type="Argument Exception")
 
 class DataException(CustomException):
     def __init__(self, message):
