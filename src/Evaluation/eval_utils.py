@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from typing import Any, Dict, List, Tuple
 
 import numpy as np
@@ -8,26 +9,6 @@ import pandas as pd
 from Dataset.data_util import nested_dicts_to_dataframe
 
 logger = logging.getLogger(__name__)
-
-
-def clean_output(infer_result: Dict[str, Any], args: Any) -> Dict[str, Any]:
-    """
-    Clean the predicted text in the inference result.
-
-    Args:
-        infer_result (Dict[str, Any]): The inference result containing predicted text.
-        args (Any): Arguments containing tokenizer information.
-
-    Returns:
-        Dict[str, Any]: The cleaned inference result.
-    """
-    infer_result["predicted_text"] = [
-        text.strip()[: text.find(args.tokenizer.eos_token)].strip()
-        if args.tokenizer.eos_token in text
-        else text.strip()
-        for text in infer_result["predicted_text"]
-    ]
-    return infer_result
 
 
 def eval_infer_result(
@@ -50,16 +31,53 @@ def eval_infer_result(
     """
     # Drop any extra observations
     for k, v in infer_result.items():
-        infer_result[k] = v[: len(valid_data)] 
+        infer_result[k] = v[: len(valid_data)]
     if args.infer_args.metric != "Perplexity":
         infer_result = clean_output(infer_result, args)
+    all_responses = [
+        response[len(args.data_args.response_prefix) :]
+        .rstrip(args.data_args.response_suffix)
+        .strip()
+        for item in valid_data
+        for response in item["responses"]
+    ]
+    infer_result["target_text"] = all_responses
 
-    all_answers = [answer for item in valid_data for answer in item["responses"]]
-    infer_result["target_text"] = all_answers
+    if args.infer_args.metric == "AI":
+        metrics, explanations = metric_func(args, infer_result, valid_data)
+        infer_result["AI-score"] = metrics
+        infer_result["AI-explanation"] = explanations
+    elif args.infer_args.metric == "Perplexity":
+        metrics = metric_func(args, infer_result, valid_data)
+        infer_result["Perplexity"] = metrics
+    elif args.infer_args.metric == "BLEU":
+        metrics = metric_func(args, infer_result, valid_data)
+        infer_result["BLEU"] = metrics
 
-    metrics = metric_func(args, infer_result, valid_data)
-    infer_result["metrics"] = metrics
+    infer_result["metrics"] = metrics  # Adaptation Validation Process
 
+    return infer_result
+
+
+def clean_output(infer_result: Dict[str, Any], args: Any) -> Dict[str, Any]:
+    """
+    Clean the predicted text in the inference result.
+
+    Args:
+        infer_result (Dict[str, Any]): The inference result containing predicted text.
+        args (Any): Arguments containing tokenizer information.
+
+    Returns:
+        Dict[str, Any]: The cleaned inference result.
+    """
+    infer_result["predicted_text"] = [
+        (
+            text.strip()[: text.find(args.tokenizer.eos_token)].strip()
+            if args.tokenizer.eos_token in text
+            else text.strip()
+        )
+        for text in infer_result["predicted_text"]
+    ]
     return infer_result
 
 
@@ -78,9 +96,6 @@ def save_predictions(
     infer_result, valid_data = format_output(args, valid_data, infer_result)
 
     valid_res_path = os.path.join(args.exp_args.output_dir, "valid_result")
-    # os.makedirs(valid_res_path, exist_ok=True)
-
-    # if args.infer_args.metric == "BLEU":
     os.makedirs(valid_res_path, exist_ok=True)
     csv_preds_name = os.path.join(
         valid_res_path, f"{mode}_predictions_step{args.env_args._curr_step}.csv"
@@ -139,10 +154,24 @@ def format_output(
 
     if "logits" in infer_result:
         infer_result["logits"] = np.array(infer_result["logits"].float())
-        
+
     if "perplexity" in infer_result:
         infer_result["perplexity"] = np.array(infer_result["perplexity"].float())
         infer_result["perplexity"] = np.mean(infer_result["perplexity"], axis=1)
+
+    if "AI-score" in infer_result:
+        infer_result["AI-score"] = infer_result["AI-score"]
+
+    if "AI-explanation" in infer_result:
+        infer_result["AI-explanation"] = np.array(
+            [
+                re.search(r"explanation:\s*(.*?)(\n|$)", item, re.DOTALL)
+                .group(1)
+                .strip()
+                for item in infer_result.get("AI-explanation", [])
+                if re.search(r"explanation:\s*(.*?)(\n|$)", item, re.DOTALL)
+            ]
+        )
 
     prompt_columns = args.data_args.prompt_column
     if isinstance(prompt_columns, tuple):
@@ -155,11 +184,30 @@ def format_output(
 
     if "predicted_text" in infer_result:
         pred_column = f"pred_{args.data_args.answer_column}"
-        valid_data[pred_column] = "NO ANSWER GENERATED. ONLY LAST ANSWER OF A CONVERSATION IS PREDICTED."
-        valid_data.loc[end_conversation_ids, pred_column] = infer_result["predicted_text"]
-        
+        valid_data[pred_column] = (
+            "NO ANSWER GENERATED. ONLY LAST ANSWER OF A CONVERSATION IS PREDICTED."
+        )
+        valid_data.loc[end_conversation_ids, pred_column] = infer_result[
+            "predicted_text"
+        ]
+
     if "perplexity" in infer_result:
         valid_data["mean_perplexity"] = -1
-        valid_data.loc[end_conversation_ids, "mean_perplexity"] = infer_result["perplexity"]
+        valid_data.loc[end_conversation_ids, "mean_perplexity"] = infer_result[
+            "perplexity"
+        ]
+
+    if "BLEU" in infer_result:
+        valid_data["BLEU"] = -1
+        valid_data.loc[end_conversation_ids, "BLEU"] = infer_result["BLEU"]
+
+    if "AI-score" in infer_result:
+        valid_data["AI-score"] = -1
+        valid_data.loc[end_conversation_ids, "AI-score"] = infer_result["AI-score"]
+
+    if "AI-explanation" in infer_result:
+        valid_data.loc[end_conversation_ids, "explanations"] = infer_result[
+            "AI-explanation"
+        ]
 
     return infer_result, valid_data

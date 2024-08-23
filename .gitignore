@@ -1,6 +1,7 @@
 data/
-output/
-
+outputs/
+notebooks/
+wandb/
 
 __pycache__/
 *.py[cod]

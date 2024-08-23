@@ -5,6 +5,7 @@ import random
 
 import numpy as np
 import torch
+
 import wandb
 
 logger = logging.getLogger(__name__)
@@ -103,10 +104,12 @@ def get_logger(args):
 
     # WandB log handler
     if args.exp_args.use_wandb:
-        if int(os.getenv("LOCAL_RANK", 0)) == 0:  # Initialize W&B only in the main process
+        if (
+            int(os.getenv("LOCAL_RANK", 0)) == 0
+        ):  # Initialize W&B only in the main process
             wandb_handler = WandbHandler(args)
             wandb_handler.setFormatter(file_formatter)
-            logger.addHandler(wandb_handler)        
+            logger.addHandler(wandb_handler)
     return logger
 
 
@@ -120,7 +123,7 @@ class WandbHandler(logging.Handler):
     def setup_wandb(self):
         if wandb.run is None:
             self.logger = wandb.init(
-                entity=self.args.exp_args.wandb_entity,            
+                entity=self.args.exp_args.wandb_entity,
                 project=self.args.exp_args.wandb_project,
                 name=self.args.exp_args.wandb_name,
                 config=vars(self.args),

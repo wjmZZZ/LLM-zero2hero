@@ -8,11 +8,7 @@ import torch
 import torch.nn as nn
 from peft import LoraConfig, get_peft_model
 from torch import nn
-from transformers import (
-    AutoConfig,
-    AutoModelForCausalLM,
-    BitsAndBytesConfig,
-)
+from transformers import AutoConfig, AutoModelForCausalLM, BitsAndBytesConfig
 from transformers.pytorch_utils import Conv1D as Conv1DTransformer
 
 from Dataset.data_util import batch_padding

@@ -33,7 +33,9 @@ def get_tokenizer(args: Any) -> PreTrainedTokenizer:
         }
 
         # Initialize the tokenizer
-        tokenizer = AutoTokenizer.from_pretrained(args.model_args.llm_backbone, **kwargs)
+        tokenizer = AutoTokenizer.from_pretrained(
+            args.model_args.llm_backbone, **kwargs
+        )
 
         # Set padding side
         tokenizer.padding_side = getattr(

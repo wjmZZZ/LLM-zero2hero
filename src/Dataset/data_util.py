@@ -84,7 +84,6 @@ def preprocess_conversation(args, df):
 
         # Check if the number of systems, prompts, and responses match
         if not (len(systems) == len(prompts) == len(responses)):
-            continue
             raise DataException(
                 f"Data anomaly: Mismatch in the number of systems ({len(systems)}), "
                 f"prompts ({len(prompts)}), and responses ({len(responses)})."
@@ -128,6 +127,8 @@ def parse_response(args: Any, response: str):
 import re
 
 import pandas as pd
+
+
 def nested_dicts_to_dataframe(data, args):
     expanded_data = {"system": [], "prompt": [], "response": []}
 
@@ -138,65 +139,29 @@ def nested_dicts_to_dataframe(data, args):
 
         # Check if the number of system messages, prompts, and responses match
         if not (len(systems) == len(prompts) == len(responses)):
-            logger.warning(f"Data anomaly: Mismatch in the number of system messages ({len(systems)}), "
-                           f"prompts ({len(prompts)}), and responses ({len(responses)}).")
+            logger.warning(
+                f"Data anomaly: Mismatch in the number of system messages ({len(systems)}), "
+                f"prompts ({len(prompts)}), and responses ({len(responses)})."
+            )
             continue
 
         for system, prompt, response in zip(systems, prompts, responses):
             # Remove special characters, keep only the original text
-            system = system.replace(args.data_args.system_prefix, "").replace(args.data_args.system_suffix, "")
-            prompt = prompt.replace(args.data_args.prompt_prefix, "").replace(args.data_args.prompt_suffix, "")
-            response = response.replace(args.data_args.response_prefix, "").replace(args.data_args.response_suffix, "")
+            system = system.replace(args.data_args.system_prefix, "").replace(
+                args.data_args.system_suffix, ""
+            )
+            prompt = prompt.replace(args.data_args.prompt_prefix, "").replace(
+                args.data_args.prompt_suffix, ""
+            )
+            response = response.replace(args.data_args.response_prefix, "").replace(
+                args.data_args.response_suffix, ""
+            )
 
             expanded_data["system"].append(system)
             expanded_data["prompt"].append(prompt)
             expanded_data["response"].append(response)
 
     return pd.DataFrame(expanded_data)
-
-# def nested_dicts_to_dataframe(data, args):
-#     expanded_data = {"system": [], "prompt": [], "response": []}
-
-#     # 定义要移除的前缀和后缀
-#     system_pattern = (
-#         re.escape(args.data_args.system_prefix)
-#         + "(.+?)"
-#         + re.escape(args.data_args.system_suffix)
-#     )
-#     prompt_pattern = (
-#         re.escape(args.data_args.prompt_prefix)
-#         + "(.+?)"
-#         + re.escape(args.data_args.prompt_suffix)
-#     )
-#     response_pattern = "(.+?)" + re.escape(args.data_args.response_suffix)
-
-#     for item in data:
-#         max_length = max(
-#             len(item["prompts"]), len(item["responses"]), len(item["systems"])
-#         )
-#         for i in range(max_length):
-#             # 使用正则表达式提取内容
-#             system = (
-#                 re.search(system_pattern, item["systems"][i]).group(1)
-#                 if i < len(item["systems"])
-#                 else None
-#             )
-#             prompt = (
-#                 re.search(prompt_pattern, item["prompts"][i]).group(1)
-#                 if i < len(item["prompts"])
-#                 else None
-#             )
-#             response = (
-#                 re.search(response_pattern, item["responses"][i]).group(1)
-#                 if i < len(item["responses"])
-#                 else None
-#             )
-
-#             expanded_data["system"].append(system)
-#             expanded_data["prompt"].append(prompt)
-#             expanded_data["response"].append(response)
-
-#     return pd.DataFrame(expanded_data)
 
 
 def worker_init_fn(worker_id: int) -> None:

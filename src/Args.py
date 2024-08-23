@@ -6,13 +6,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple
 
+import coolname
 import numpy as np
 import torch
 import yaml
 from transformers import HfArgumentParser
 
-from Utils.utils import flatten_dict, get_logger
 from Others.exceptions import ArgumentException, DataException
+from Utils.utils import flatten_dict, get_logger
 
 
 # ===================================================================================
@@ -79,39 +80,44 @@ class ExperimentArguments:
     output_dir: str = "./outputs"
     log_file_name: str = "log.log"
     use_wandb: bool = False
-    
+
     wandb_entity: str = ""
     wandb_project: str = ""
     wandb_name: str = ""
 
+    def generate_experiment_name(self) -> str:
+        return coolname.generate_slug(2)
 
     def __post_init__(self):
         os.makedirs(self.output_dir, exist_ok=True)
         exp_output_dir = os.path.join(self.output_dir, self.experiment_name)
         os.makedirs(exp_output_dir, exist_ok=True)
-        self.log_file_name = os.path.join(exp_output_dir, self.log_file_name)
-        
-        if self.use_wandb and not self.wandb_entity:
-            raise ArgumentException("wandb_entity must be provided when use_wandb is True")
-        if self.use_wandb and self.wandb_project == '':           
-            self.wandb_project = self.experiment_name
-        if self.use_wandb and self.wandb_name == '':             
-            self.wandb_name = self.experiment_name
-            
 
-        # If there is a sub-experiment
         if self.sub_experiment_name:
-            sub_exp_dir = (
-                self.output_dir
-                + "/"
-                + self.experiment_name
-                + "/"
-                + self.sub_experiment_name
-            )
-            os.makedirs(sub_exp_dir, exist_ok=True)
-            self.log_file_name = os.path.join(sub_exp_dir, self.log_file_name)
-        
-        self.output_dir = exp_output_dir
+            self.output_dir = os.path.join(exp_output_dir, self.sub_experiment_name)
+            os.makedirs(self.output_dir, exist_ok=True)
+        else:
+            self.output_dir = exp_output_dir
+
+        self.log_file_name = os.path.join(self.output_dir, self.log_file_name)
+
+        if self.use_wandb:
+            if not self.wandb_entity:
+                raise ArgumentException(
+                    "wandb_entity must be provided when use_wandb is True"
+                )
+
+            if self.wandb_project == "":
+                self.wandb_project = self.experiment_name
+
+            if self.wandb_name == "":
+                random_name = self.generate_experiment_name()
+                if self.sub_experiment_name:
+                    self.wandb_name = (
+                        f"{self.experiment_name}_{self.sub_experiment_name}"
+                    )
+                else:
+                    self.wandb_name = f"{self.experiment_name}_{random_name}"
 
 
 @dataclass
@@ -225,6 +231,7 @@ class InferenceArguments:
     max_length_inference: int = 256
     max_time: float = 0
     batch_size_inference: int = 0
+    distributed_inference: bool = False
 
     do_sample: bool = False
     num_beams: int = 1
@@ -234,8 +241,30 @@ class InferenceArguments:
     top_k: int = 0
     top_p: float = 1.0
 
+    AI_eval_model: str = "gpt-4o"
+    AI_eval_template_name: str = "default"
+    openai_api_key: str = ""
+    openai_base_url: str = ""
+    openai_max_retries: int = 3
+    openai_timeout: float = 10
+
     _best_valid_metric: float = float("inf")
     _objective_op: Callable[[float, float], bool] = np.less
+
+    def __post_init__(self):
+        if self.metric == "AI":
+            if self.AI_eval_model == "":
+                raise ArgumentException(
+                    "AI_eval_model must be provided when metric is AI"
+                )
+            if self.openai_api_key == "":
+                raise ArgumentException(
+                    "openai_api_key must be provided when metric is AI"
+                )
+            if self.openai_base_url == "":
+                raise ArgumentException(
+                    "openai_base_url must be provided when metric is AI"
+                )
 
 
 @dataclass
@@ -259,7 +288,6 @@ class EnvironmentArguments:
     number_of_workers: int = 4
 
     # Private parameter configuration
-    _distributed_inference: bool = False
     _distributed: bool = False
     _local_rank: int = 0
     _world_size: int = 1
@@ -285,15 +313,19 @@ class Arguments:
         table = self.table_beauty()
         logger = get_logger(self)
         logger.info("\n" + table)
-        
-        if self.exp_args.use_wandb and self.exp_args.wandb_project == self.exp_args.experiment_name:
-            logger.warning("wandb_project is set to experiment_name. It is recommended to set a specific wandb_project for better management and differentiation of experiments.")              
-           
-        if self.exp_args.use_wandb and self.exp_args.wandb_name == self.exp_args.experiment_name:
-            logger.warning("wandb_name is set to experiment_name. It is recommended to set a specific wandb_name for better management and differentiation of experiments.")    
+
+        if (
+            self.exp_args.use_wandb
+            and self.exp_args.wandb_name == self.exp_args.experiment_name
+        ):
+            logger.warning(
+                "wandb_name is set to experiment_name. It is recommended to set a specific wandb_name for better management and differentiation of experiments."
+            )
 
         if self.debug:
-            logger.debug("🔥🔥 Debug mode is enabled. Detailed debug information will be logged. 🔥🔥")
+            logger.debug(
+                "🔥🔥 Debug mode is enabled. Detailed debug information will be logged. 🔥🔥"
+            )
 
     def table_beauty(self):
         """
@@ -323,6 +355,19 @@ class Arguments:
                 else self.exp_args.experiment_description
             ),
         }
+        if self.exp_args.sub_experiment_name:
+            log_info["Sub-Experiment Name"] = self.exp_args.sub_experiment_name
+
+        if "Sub-Experiment Name" in log_info:
+            items = list(log_info.items())
+            main_exp_index = next(
+                i for i, (k, v) in enumerate(items) if k == "Experiment Name"
+            )
+            items.insert(
+                main_exp_index + 1,
+                ("Sub-Experiment Name", log_info["Sub-Experiment Name"]),
+            )
+            log_info = dict(items)
 
         return tabulate(
             log_info.items(), headers=["Configuration", ""], tablefmt="pretty"
@@ -367,9 +412,11 @@ def save_args(args: Arguments, file_format: str = "json") -> None:
     Returns:
         None
     """
-    file_path = os.path.join(
-        args.exp_args.output_dir, f"{args.exp_args.experiment_name}_cfg.{file_format}"
-    )
+    if args.exp_args.sub_experiment_name:
+        file_name = f"{args.exp_args.experiment_name}_{args.exp_args.sub_experiment_name}_cfg.{file_format}"
+    else:
+        file_name = f"{args.exp_args.experiment_name}_cfg.{file_format}"
+    file_path = os.path.join(args.exp_args.output_dir, file_name)
     serializable_args = to_dict(args)
     with open(file_path, "w", encoding="utf-8") as f:
         json.dump(serializable_args, f, ensure_ascii=False, indent=4)

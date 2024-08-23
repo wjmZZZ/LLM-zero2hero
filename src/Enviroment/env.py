@@ -186,9 +186,7 @@ def check_disk_space(
         * (
             1
             if param.data.dtype in [torch.int8, torch.uint8]
-            else 2
-            if param.data.dtype in [torch.float16, torch.bfloat16]
-            else 4
+            else 2 if param.data.dtype in [torch.float16, torch.bfloat16] else 4
         )
         for param in model.parameters()
     )

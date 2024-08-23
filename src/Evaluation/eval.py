@@ -2,6 +2,7 @@ import logging
 from typing import Any, Dict, Tuple
 
 import numpy as np
+import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 
@@ -16,7 +17,7 @@ def LLM_eval(
     args: Any,
     model: torch.nn.Module,
     valid_dataloader: DataLoader,
-    valid_data: Any,
+    valid_data: pd.DataFrame,
     metric_func: callable,
     mode: str = "validation",
 ) -> Tuple[float, float]:
@@ -30,7 +31,7 @@ def LLM_eval(
         args (Any): Configuration object containing evaluation settings.
         model (torch.nn.Module): The trained model to evaluate.
         valid_dataloader (DataLoader): DataLoader for validation data.
-        valid_data (Any): Validation data.
+        valid_data (pd.DataFrame): Validation data.
         metric_func (callable): Function to calculate evaluation metrics.
         mode (str, optional): Evaluation mode. Defaults to "validation".
 
@@ -50,16 +51,13 @@ def LLM_eval(
     if args.env_args._distributed:
         for key, value in infer_result.items():
             infer_result[key] = sync_across_processes(
-                                                    value, 
-                                                    args.env_args._world_size, 
-                                                    group=args.env_args._cpu_comm
-                                                )
+                value, args.env_args._world_size, group=args.env_args._cpu_comm
+            )
 
     if args.env_args._local_rank != 0:
         if args.env_args._distributed:
             torch.distributed.barrier()
         return 0, 0
-
 
     infer_result = eval_infer_result(args, valid_data, infer_result, metric_func)
 

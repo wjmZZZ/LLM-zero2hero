@@ -5,12 +5,10 @@ from typing import Any, Dict
 
 import torch
 import transformers
-from deepspeed.utils.zero_to_fp32 import get_fp32_state_dict_from_zero_checkpoint
-from transformers import (
-    GenerationMixin,
-    StoppingCriteria,
-    StoppingCriteriaList,
-)
+from deepspeed.utils.zero_to_fp32 import \
+    get_fp32_state_dict_from_zero_checkpoint
+from transformers import (GenerationMixin, StoppingCriteria,
+                          StoppingCriteriaList)
 from transformers.utils import logging as transformers_logging
 
 from Dataset.data_util import batch_padding

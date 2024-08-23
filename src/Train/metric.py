@@ -1,11 +1,16 @@
 import logging
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, List, Tuple, Union
 
 import numpy as np
 import pandas as pd
 import torch
+from joblib import Parallel, delayed
 from nltk.translate.bleu_score import SmoothingFunction, sentence_bleu
 from torch import nn
+from tqdm import tqdm
+
+from Evaluation.AI_utils import AIEvaluator, get_ai_template
+from Utils.utils import TqdmTologger
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +46,73 @@ def sacrebleu_score(args: Any, results: Dict, valid_data: pd.DataFrame) -> np.nd
     return np.array(scores)
 
 
-# TODO: Add OpenAI-style evaluation for SiliconCloud
-# TODO: Add custom evaluations such as embedding similarity, text length, etc.
+# DONE Add OpenAI-style evaluation for SiliconCloud
+# TODO Add custom evaluations such as embedding similarity, text length, etc.
+def AI_eval_score(
+    args,
+    results: Dict[str, List[str]],
+    valid_df,
+) -> Union[float, Tuple[np.ndarray, List[str]]]:
+    """
+    Calculate AI score for given results.
+
+    Args:
+        args: Configuration parameters.
+        results: Dictionary containing predicted and target texts.
+        valid_df: Validation data DataFrame.
+
+    Returns:
+        If raw_results is True, returns a tuple of (scores, explanations).
+        Otherwise, returns the average score.
+    """
+
+    # Get the specified AI evaluation template
+    eval_template = get_ai_template(args.infer_args.AI_eval_template_name)
+
+    # Prepare evaluation data
+    eval_data = pd.DataFrame(
+        {
+            "prompt_": [
+                prompt[len(args.data_args.prompt_prefix) :]
+                .rstrip(args.data_args.prompt_suffix)
+                .strip()
+                for item in valid_df
+                for prompt in item["prompts"]
+            ],
+            "predicted_text_": results["predicted_text"],
+            "target_text_": results["target_text"],
+        }
+    )
+
+    # Fill the evaluation template
+    eval_data["formatted_evaluation"] = eval_data.apply(
+        lambda row: eval_template.format(
+            prompt=row["prompt_"],
+            predicted_text=row["predicted_text_"],
+            target_text=row["target_text_"],
+        ),
+        axis=1,
+    )
+
+    # Set up progress bar
+    tqdm_logger = TqdmTologger(logger)
+    ai_evaluator = AIEvaluator(args)
+    model = args.infer_args.AI_eval_model
+    # Perform parallel evaluation
+    eval_results = Parallel(n_jobs=8, backend="threading")(
+        delayed(ai_evaluator.evaluate_response)(formatted_evaluation, model)
+        for formatted_evaluation in tqdm(
+            eval_data["formatted_evaluation"].values,
+            file=tqdm_logger,
+            desc=f" AI evaluation {args.infer_args.AI_eval_model}",
+            total=len(eval_data),
+        )
+    )
+
+    # Unpack results
+    scores, explanations = zip(*eval_results)
+
+    return np.array(scores), list(explanations)
 
 
 class Perplexity(nn.Module):
@@ -85,14 +155,14 @@ class Perplexity(nn.Module):
         return perplexity
 
 
-def perplexity(args: Any, results: Dict, val_df: pd.DataFrame) -> np.ndarray:
+def perplexity(args: Any, results: Dict, valid_df: pd.DataFrame) -> np.ndarray:
     """
     Extract perplexity from results.
 
     Args:
         args (Any): Configuration object.
         results (Dict): Dictionary containing perplexity results.
-        val_df (pd.DataFrame): Validation dataframe.
+        valid_df (pd.DataFrame): Validation dataframe.
 
     Returns:
         np.ndarray: Array of perplexity values.
@@ -108,6 +178,7 @@ class Metrics:
     _metrics = {
         "Perplexity": (perplexity, "min", "mean"),
         "BLEU": (sacrebleu_score, "max", "mean"),
+        "AI": (AI_eval_score, "max", "mean"),
     }
 
     @classmethod

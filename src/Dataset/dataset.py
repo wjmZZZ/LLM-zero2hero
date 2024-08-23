@@ -7,11 +7,9 @@ from typing import Any
 import pandas as pd
 import torch
 from sklearn.model_selection import train_test_split
-from tabulate import tabulate
 from torch.utils.data import DataLoader, Sampler, SequentialSampler
 
 from Dataset.data_util import (OrderedDistributedSampler,
-                               nested_dicts_to_dataframe,
                                preprocess_conversation, worker_init_fn)
 from Others.exceptions import DataException
 
@@ -168,7 +166,7 @@ def get_valid_dataloader(valid_dataset: Any, args: Any):
     """
 
     sampler: Sampler
-    if args.env_args._distributed and args.env_args._distributed_inference:
+    if args.env_args._distributed and args.infer_args.distributed_inference:
         sampler = OrderedDistributedSampler(
             valid_dataset,
             num_replicas=args.env_args._world_size,
