@@ -1,68 +1,15 @@
 import json
 import os
-import sys
 from dataclasses import dataclass, is_dataclass
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Tuple
 
 import coolname
 import numpy as np
 import torch
-import yaml
-from transformers import HfArgumentParser
 
-from Others.exceptions import ArgumentException, DataException
-from Utils.utils import flatten_dict, get_logger
-
-
-# ===================================================================================
-# Get Arguments
-# ===================================================================================
-def get_args(args: Optional[Dict[str, Any]] = None):
-    parser = HfArgumentParser(
-        (
-            ExperimentArguments,
-            DatasetArguments,
-            ModelArguments,
-            TrainingArguments,
-            InferenceArguments,
-            EnvironmentArguments,
-        )
-    )
-
-    if args is not None:
-        (
-            exp_args,
-            data_args,
-            model_args,
-            training_args,
-            infer_args,
-            env_args,
-        ) = parser.parse_dict(args)
-    else:
-        # Extract command line arguments
-        remaining_args = []
-        config_file = None
-
-    for arg in sys.argv[1:]:
-        if arg.endswith((".yaml", ".json")):
-            config_file = arg
-        else:
-            remaining_args.append(arg)
-
-    if config_file:
-        config_path = Path(os.path.abspath(config_file))
-        if config_file.endswith(".yaml"):
-            nested_dict = yaml.safe_load(config_path.read_text())
-        else:
-            with config_path.open("r", encoding="utf-8") as file:
-                nested_dict = json.load(file)
-        flat_dict = flatten_dict(nested_dict)
-        return parser.parse_dict(flat_dict)
-    else:
-        return parser.parse_args_into_dataclasses(remaining_args)
-
+from src.Others.exceptions import ArgumentException, DataException
+from src.Utils.utils import get_logger
 
 # ===========================================================================
 # Argument Configuration Classes
@@ -76,6 +23,7 @@ class ExperimentArguments:
     experiment_name: str = "llm-zero2hero"
     sub_experiment_name: str = ""
     experiment_description: str = ""
+    task: str = ""
 
     output_dir: str = "./outputs"
     log_file_name: str = "log.log"
@@ -136,7 +84,7 @@ class DatasetArguments:
     answer_column: str = "response"
 
     system_prefix: str = "<|system|>"
-    system_defalut: str = "You are a helpful assistant."
+    system_default: str = "You are a helpful assistant."
     system_suffix: str = "<|system|>"
     prompt_prefix: str = "<|prompt|>"
     prompt_suffix: str = "<|prompt|>"
@@ -150,7 +98,6 @@ class DatasetArguments:
             raise DataException(
                 "Validation strategy must be set, options are [custom, auto]"
             )
-
 
 @dataclass
 class ModelArguments:
@@ -217,7 +164,6 @@ class TrainingArguments:
         self.evaluate_before_training = (
             self.evaluate_before_training or self.num_train_epochs == 0
         )
-
 
 @dataclass
 class InferenceArguments:
@@ -299,7 +245,7 @@ class EnvironmentArguments:
 
 
 @dataclass
-class Arguments:
+class SFTArguments:
     exp_args: ExperimentArguments
     data_args: DatasetArguments
     model_args: ModelArguments
@@ -339,6 +285,7 @@ class Arguments:
         # Create a dictionary containing the information you want to display in the log
         log_info = {
             "Experiment Name": self.exp_args.experiment_name,
+            "Experiment Task": self.exp_args.task,            
             "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "Base Model": self.model_args.llm_backbone,
             "Training Seed": self.env_args.seed,
@@ -399,24 +346,3 @@ def to_dict(obj: Any) -> Dict[str, Any]:
         return obj
     else:
         return str(obj)
-
-
-def save_args(args: Arguments, file_format: str = "json") -> None:
-    """
-    Save the experiment arguments to a file.
-
-    Args:
-        args (Arguments): The experiment arguments to save.
-        file_format (str, optional): The format to save the file in. Defaults to "json".
-
-    Returns:
-        None
-    """
-    if args.exp_args.sub_experiment_name:
-        file_name = f"{args.exp_args.experiment_name}_{args.exp_args.sub_experiment_name}_cfg.{file_format}"
-    else:
-        file_name = f"{args.exp_args.experiment_name}_cfg.{file_format}"
-    file_path = os.path.join(args.exp_args.output_dir, file_name)
-    serializable_args = to_dict(args)
-    with open(file_path, "w", encoding="utf-8") as f:
-        json.dump(serializable_args, f, ensure_ascii=False, indent=4)

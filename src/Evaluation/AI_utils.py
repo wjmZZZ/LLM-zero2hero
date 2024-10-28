@@ -35,7 +35,7 @@ from typing import Tuple
 
 from openai import OpenAI
 
-from Others.exceptions import MetricException
+from src.Others.exceptions import MetricException
 
 logger = logging.getLogger(__name__)
 

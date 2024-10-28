@@ -6,9 +6,9 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 
-from Enviroment.env_utils import sync_across_processes
-from Evaluation.eval_utils import eval_infer_result, save_predictions
-from Evaluation.infer import LLM_infer
+from src.Enviroment.env_utils import sync_across_processes
+from src.Evaluation.eval_utils import eval_infer_result, save_predictions
+from src.Evaluation.infer import LLM_infer
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +60,13 @@ def LLM_eval(
         return 0, 0
 
     infer_result = eval_infer_result(args, valid_data, infer_result, metric_func)
+    
+    logger.info(f'--------------------------------------------')
+    for key in infer_result:
+        if key.startswith("additional_log_") or key == "loss":
+            value = np.mean(infer_result[key].float().cpu().numpy())
+            key = key.replace("additional_log_", "").replace("_", " ").capitalize()
+            logger.info(f"📊 Mean {mode} {key}: {value:.5f}")
 
     valid_loss = np.mean(
         infer_result.get("loss", torch.tensor(0)).float().cpu().numpy()
@@ -67,9 +74,10 @@ def LLM_eval(
     valid_metric = np.mean(infer_result["metrics"])
 
     logger.info(
-        f"🔍 {mode.capitalize()} | {args.infer_args.metric}: {valid_metric:.5f} | "
-        f"Step: {args.env_args._curr_step}"
+        f"🔍 {mode.capitalize()} | ✨{args.infer_args.metric}: {valid_metric:.5f} | "
+        f"🎢 Step: {args.env_args._curr_step}"
     )
+    logger.info(f'--------------------------------------------')
 
     save_predictions(args, infer_result, valid_data, mode)
 

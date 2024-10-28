@@ -10,8 +10,8 @@ import torch
 from torch import distributed
 from torch.utils.data import Sampler
 
-from Others.exceptions import DataException
-from Utils.utils import seed_everything
+from src.Others.exceptions import DataException, MetricException
+from src.Utils.utils import seed_everything
 
 logger = logging.getLogger(__name__)
 
@@ -50,9 +50,10 @@ def batch_padding(
     return batch
 
 
-def preprocess_conversation(args, df):
+def preprocess_conversation(args: Any, df: pd.DataFrame) -> List[Dict]:
     """
     Preprocess the conversation data from a DataFrame.
+    Supports both ShareGPT format and DPO preference format.
 
     Args:
         args: Configuration arguments.
@@ -65,33 +66,62 @@ def preprocess_conversation(args, df):
         DataException: If the number of systems, prompts, and responses don't match.
     """
     conversations = []
-
-    for item in df["conversations"]:
+    if args.data_args.system_column is None:
+        args.data_args.system_column = "system"
+    
+    for _, row in df.iterrows():
+        systems = []
         prompts = []
         responses = []
-        systems = []
+        chosen_responses = []
+        rejected_responses = []
 
-        for conv in item:
-            current_system = ""
-            if "system" in conv:
-                current_system = parse_system(args, conv["system"])
-
+        # Get system message from outer dict if exists (ShareGPT format)
+        # Currently not supporting tools, function_call and observation
+        try:
+            current_system = (row[args.data_args.system_column] 
+                            if not pd.isnull(row.get(args.data_args.system_column)) 
+                            else args.data_args.system_default)
+        except (KeyError, AttributeError):
+            current_system = args.data_args.system_default
+                   
+        # Process conversation messages
+        for conv in row["conversations"]:
             if conv["from"] == "human":
                 systems.append(parse_system(args, current_system))
                 prompts.append(parse_prompt(args, conv["value"]))
             elif conv["from"] == "assistant" or conv["from"] == "gpt":
                 responses.append(parse_response(args, conv["value"]))
+            elif conv["from"] == "chosen_gpt":
+                chosen_responses.append(parse_response(args, conv["value"]))
+            elif conv["from"] == "rejected_gpt":
+                rejected_responses.append(parse_response(args, conv["value"]))
 
-        # Check if the number of systems, prompts, and responses match
-        if not (len(systems) == len(prompts) == len(responses)):
-            raise DataException(
-                f"Data anomaly: Mismatch in the number of systems ({len(systems)}), "
-                f"prompts ({len(prompts)}), and responses ({len(responses)})."
-            )
-
-        conversations.append(
-            {"prompts": prompts, "responses": responses, "systems": systems}
-        )
+        # Determine the type of conversation and process accordingly
+        if len(chosen_responses) > 0 and len(rejected_responses) > 0:
+            # Preference type conversation
+            if not (len(systems) == len(prompts) == len(chosen_responses) == len(rejected_responses)):
+                raise DataException(f"Warning: Mismatch in preference type conversation - systems ({len(systems)}), prompts ({len(prompts)}), "
+                      f"chosen responses ({len(chosen_responses)}), and rejected responses ({len(rejected_responses)}).")
+                continue  # Error indicates data issue, can move continue to skip erroneous samples ⬆️
+            conversations.append({
+                f"{args.data_args.system_column}": systems,                
+                f"{args.data_args.prompt_column}": prompts,
+                f"{args.data_args.answer_column}": chosen_responses,
+                f"{args.data_args.rejected_answer_column}": rejected_responses
+            })
+        else:
+            # Standard type conversation
+            if not (len(systems) == len(prompts) == len(responses)):
+                continue
+                raise DataException(f"Warning: Mismatch in standard type conversation - systems ({len(systems)}), "
+                      f"prompts ({len(prompts)}), and responses ({len(responses)}).")
+                continue  # Error indicates data issue, can move continue to skip erroneous samples ⬆️
+            conversations.append({
+                f"{args.data_args.system_column}": systems,                
+                f"{args.data_args.prompt_column}": prompts,
+                f"{args.data_args.answer_column}": responses,
+            })
 
     return conversations
 
@@ -102,8 +132,6 @@ def parse_system(args: Any, system: str):
         and args.data_args.system_suffix == "None"
     ):
         return system
-    if system == "":
-        system = args.data_args.system_defalut
     system_prefix = codecs.decode(args.data_args.system_prefix, "unicode_escape")
     system_suffix = codecs.decode(args.data_args.system_suffix, "unicode_escape")
     system = f"{system_prefix}{system}{system_suffix}"
@@ -124,42 +152,67 @@ def parse_response(args: Any, response: str):
     return response
 
 
-import re
-
-import pandas as pd
-
-
 def nested_dicts_to_dataframe(data, args):
-    expanded_data = {"system": [], "prompt": [], "response": []}
+    if args.exp_args.task == "SFT":
+        expanded_data = {"system": [], "prompt": [], "response": []}
+    elif args.exp_args.task == "DPO":
+        expanded_data = {"system": [], "prompt": [], "chosen_response": [], "rejected_response": []}
+    else:
+        raise MetricException(f"Unsupported task type: {args.exp_args.task}")
 
     for item in data:
-        systems = item.get("systems", [])
-        prompts = item.get("prompts", [])
-        responses = item.get("responses", [])
+        systems = item.get(f"{args.data_args.system_column}", [])
+        prompts = item.get(f"{args.data_args.prompt_column}", [])
+        
+        if args.exp_args.task == "SFT":
+            responses = item.get(f"{args.data_args.answer_column}", [])
+            if not (len(systems) == len(prompts) == len(responses)):
+                logger.warning(
+                    f"Data anomaly: Mismatch in the number of system messages ({len(systems)}), "
+                    f"prompts ({len(prompts)}), and responses ({len(responses)})."
+                )
+                continue
+            items_to_process = zip(systems, prompts, responses)
+        else:  # DPO
+            chosen_responses = item.get(f"{args.data_args.answer_column}", [])
+            rejected_responses = item.get(f"{args.data_args.rejected_answer_column}", [])
+            if not (len(systems) == len(prompts) == len(chosen_responses) == len(rejected_responses)):
+                logger.warning(
+                    f"Data anomaly: Mismatch in the number of system messages ({len(systems)}), "
+                    f"prompts ({len(prompts)}), chosen responses ({len(chosen_responses)}), "
+                    f"and rejected responses ({len(rejected_responses)})."
+                )
+                continue
+            items_to_process = zip(systems, prompts, chosen_responses, rejected_responses)
 
-        # Check if the number of system messages, prompts, and responses match
-        if not (len(systems) == len(prompts) == len(responses)):
-            logger.warning(
-                f"Data anomaly: Mismatch in the number of system messages ({len(systems)}), "
-                f"prompts ({len(prompts)}), and responses ({len(responses)})."
-            )
-            continue
-
-        for system, prompt, response in zip(systems, prompts, responses):
-            # Remove special characters, keep only the original text
-            system = system.replace(args.data_args.system_prefix, "").replace(
+        for items in items_to_process:
+            # Process system message
+            system = items[0].replace(args.data_args.system_prefix, "").replace(
                 args.data_args.system_suffix, ""
             )
-            prompt = prompt.replace(args.data_args.prompt_prefix, "").replace(
+            expanded_data["system"].append(system)
+
+            # Process prompt
+            prompt = items[1].replace(args.data_args.prompt_prefix, "").replace(
                 args.data_args.prompt_suffix, ""
             )
-            response = response.replace(args.data_args.response_prefix, "").replace(
-                args.data_args.response_suffix, ""
-            )
-
-            expanded_data["system"].append(system)
             expanded_data["prompt"].append(prompt)
-            expanded_data["response"].append(response)
+            
+            # Process response(s)
+            if args.exp_args.task == "SFT":
+                response = items[2].replace(args.data_args.response_prefix, "").replace(
+                    args.data_args.response_suffix, ""
+                )
+                expanded_data["response"].append(response)
+            else:  # DPO
+                chosen = items[2].replace(args.data_args.response_prefix, "").replace(
+                    args.data_args.response_suffix, ""
+                )
+                rejected = items[3].replace(args.data_args.response_prefix, "").replace(
+                    args.data_args.response_suffix, ""
+                )
+                expanded_data["chosen_response"].append(chosen)
+                expanded_data["rejected_response"].append(rejected)
 
     return pd.DataFrame(expanded_data)
 

@@ -9,8 +9,8 @@ from nltk.translate.bleu_score import SmoothingFunction, sentence_bleu
 from torch import nn
 from tqdm import tqdm
 
-from Evaluation.AI_utils import AIEvaluator, get_ai_template
-from Utils.utils import TqdmTologger
+from src.Evaluation.AI_utils import AIEvaluator, get_ai_template
+from src.Utils.utils import TqdmTologger
 
 logger = logging.getLogger(__name__)
 
@@ -70,20 +70,31 @@ def AI_eval_score(
     eval_template = get_ai_template(args.infer_args.AI_eval_template_name)
 
     # Prepare evaluation data
-    eval_data = pd.DataFrame(
-        {
-            "prompt_": [
-                prompt[len(args.data_args.prompt_prefix) :]
+    prompts = []
+    for item in valid_df:
+        if isinstance(item, dict) and args.data_args.prompt_column in item:
+            prompts.extend([
+                prompt[len(args.data_args.prompt_prefix):]
                 .rstrip(args.data_args.prompt_suffix)
                 .strip()
-                for item in valid_df
-                for prompt in item["prompts"]
-            ],
-            "predicted_text_": results["predicted_text"],
-            "target_text_": results["target_text"],
+                for prompt in item[args.data_args.prompt_column]
+            ])
+        else:
+            # If the structure of valid_df is not as expected, record the error and use an empty string
+            logger.error(f"❌ Unexpected item structure in valid_df: {item}")
+            prompts.append(" ")
+
+    # Ensure all data lengths are consistent
+    min_length = min(len(prompts), len(results["predicted_text"]), len(results["target_text"]))
+    
+    eval_data = pd.DataFrame(
+        {
+            "prompt_": prompts[:min_length],
+            "predicted_text_": results["predicted_text"][:min_length],
+            "target_text_": results["target_text"][:min_length],
         }
     )
-
+    
     # Fill the evaluation template
     eval_data["formatted_evaluation"] = eval_data.apply(
         lambda row: eval_template.format(

@@ -9,9 +9,9 @@ import torch
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Sampler, SequentialSampler
 
-from Dataset.data_util import (OrderedDistributedSampler,
+from src.Dataset.data_util import (OrderedDistributedSampler,
                                preprocess_conversation, worker_init_fn)
-from Others.exceptions import DataException
+from src.Others.exceptions import DataException
 
 logger = logging.getLogger(__name__)
 
@@ -44,11 +44,21 @@ def load_data(args):
 
     train_df = preprocess_conversation(args, train_df)
     valid_df = preprocess_conversation(args, valid_df)
-
-    logger.info(
-        f'\n\n{train_df[0]["systems"][0]}{train_df[0]["prompts"][0]}{train_df[0]["responses"][0]}\n'
-    )
-
+    
+    if args.exp_args.task == "SFT":
+        logger.info(
+            f'\n\n{train_df[0][args.data_args.system_column][0]}\
+                {train_df[0][args.data_args.prompt_column][0]}\
+                {train_df[0][args.data_args.answer_column][0]}\n'
+        )
+    elif args.exp_args.task == "DPO":
+        logger.info(
+            f'\n\n{train_df[0][args.data_args.system_column][0]}\
+                {train_df[0][args.data_args.prompt_column][0]}\n \
+            chosen_response:\n {train_df[0][args.data_args.answer_column][0]}\n \
+            rejected_response:\n {train_df[0][args.data_args.rejected_answer_column][0]}\n'
+        )
+        
     return train_df, valid_df
 
 

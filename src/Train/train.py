@@ -9,11 +9,11 @@ from torch.cuda.amp import GradScaler, autocast
 from tqdm import tqdm
 
 import wandb
-from Evaluation.eval import LLM_eval
-from Model.model_utils import save_checkpoint
-from Others.exceptions import TrainingException
-from Train.train_utils import get_torch_dtype
-from Utils.utils import TqdmTologger, seed_everything
+from src.Evaluation.eval import LLM_eval
+from src.Model.model_utils import save_checkpoint
+from src.Others.exceptions import TrainingException
+from src.Train.train_utils import get_torch_dtype
+from src.Utils.utils import TqdmTologger, seed_everything
 
 logger = logging.getLogger(__name__)
 
@@ -213,9 +213,9 @@ def LLM_train(
                     if objective_op(valid_metric, best_valid_metric):
                         logger.info(
                             f"🏆 [BEST MODEL] | "
-                            f"metric:{args.infer_args.metric} | "
-                            f"improvement:{best_valid_metric:.3f} -> {valid_metric:.5f} | "
-                            f"📁 {args.exp_args.output_dir}"
+                            f"✨ {args.infer_args.metric}: {valid_metric:.5f} | "
+                            f"🚀 improvement:{best_valid_metric:.3f} -> {valid_metric:.3f} | "
+                            f"📁 save to {args.exp_args.output_dir}"
                         )
                         logger.info(f"")
                         save_checkpoint(

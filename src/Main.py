@@ -2,23 +2,29 @@ import gc
 import logging
 import time
 import warnings
-
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 warnings.filterwarnings("ignore")
 
-from Args import Arguments, get_args, save_args
-from Dataset.dataset import (get_train_dataloader, get_valid_dataloader,
+from src.Args.base_args import get_args, save_args
+from src.Args.sft_args import SFTArguments  
+from src.Args.dpo_args import DPOArguments
+from src.Dataset.dataset import (get_train_dataloader, get_valid_dataloader,
                              load_data)
-from Dataset.llm_dataset import LLM_Dataset
-from Enviroment.env import (Prepare_environment, check_disk_space,
+from src.Dataset.sft_dataset import LLM_Dataset
+from src.Dataset.dpo_dataset import DPO_Dataset
+from src.Enviroment.env import (Prepare_environment, check_disk_space,
                             wrap_model_distributed)
-from Model.model import LLM
-from Model.tokenizer import get_tokenizer
-from Train.lr_scheduler import get_scheduler
-from Train.metric import get_metric
-from Train.optimizer import get_optimizer
-from Train.train import LLM_train
-from Train.train_utils import calculate_steps, compile_model
-from Utils.utils import get_logger
+from src.Model.sft_model import LLM
+from src.Model.dpo_model import DPO_LLM
+from src.Model.tokenizer import get_tokenizer
+from src.Train.lr_scheduler import get_scheduler
+from src.Train.metric import get_metric
+from src.Train.optimizer import get_optimizer
+from src.Train.train import LLM_train
+from src.Train.train_utils import calculate_steps, compile_model
+from src.Utils.utils import get_logger
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +32,15 @@ logger = logging.getLogger(__name__)
 def main():
     # Load arguments
     exp_args, data_args, model_args, training_args, infer_args, env_args = get_args()
-    args = Arguments(
-        exp_args, data_args, model_args, training_args, infer_args, env_args
-    )
+    
+    if exp_args.task == "SFT":
+        args = SFTArguments(
+            exp_args, data_args, model_args, training_args, infer_args, env_args
+        )
+    elif exp_args.task == "DPO":
+        args = DPOArguments(
+            exp_args, data_args, model_args, training_args, infer_args, env_args
+        )
 
     logger = get_logger(args)
     logger.info("🚀 Loading arguments")
@@ -41,9 +53,13 @@ def main():
     train_data, valid_data = load_data(args)
 
     args.tokenizer = get_tokenizer(args)
-
-    train_dataset = LLM_Dataset(conversations=train_data, args=args)
-    valid_dataset = LLM_Dataset(conversations=valid_data, args=args, mode="validation")
+    
+    if args.exp_args.task == "SFT":
+        train_dataset = LLM_Dataset(conversations=train_data, args=args)
+        valid_dataset = LLM_Dataset(conversations=valid_data, args=args, mode="validation")
+    elif args.exp_args.task == "DPO":
+        train_dataset = DPO_Dataset(conversations=train_data, args=args)
+        valid_dataset = DPO_Dataset(conversations=valid_data, args=args, mode="validation")
 
     train_dataloader = get_train_dataloader(train_dataset, args=args)
     valid_dataloader = get_valid_dataloader(valid_dataset, args=args)
@@ -59,7 +75,10 @@ def main():
     # Save a copy of the arguments
     save_args(args)
 
-    model = LLM(args)
+    if args.exp_args.task == "SFT":
+        model = LLM(args)
+    elif args.exp_args.task == "DPO":
+        model = DPO_LLM(args)
 
     # Check if there is enough disk space
     check_disk_space(model, args.exp_args.output_dir, args.env_args.use_deepspeed)

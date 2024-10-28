@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Tuple
 import numpy as np
 import pandas as pd
 
-from Dataset.data_util import nested_dicts_to_dataframe
+from src.Dataset.data_util import nested_dicts_to_dataframe
 
 logger = logging.getLogger(__name__)
 
@@ -34,14 +34,14 @@ def eval_infer_result(
         infer_result[k] = v[: len(valid_data)]
     if args.infer_args.metric != "Perplexity":
         infer_result = clean_output(infer_result, args)
-    all_responses = [
-        response[len(args.data_args.response_prefix) :]
-        .rstrip(args.data_args.response_suffix)
-        .strip()
-        for item in valid_data
-        for response in item["responses"]
-    ]
-    infer_result["target_text"] = all_responses
+        all_responses = [
+            response[len(args.data_args.response_prefix) :]
+            .rstrip(args.data_args.response_suffix)
+            .strip()
+            for item in valid_data
+            for response in item[args.data_args.answer_column]
+        ]
+        infer_result["target_text"] = all_responses
 
     if args.infer_args.metric == "AI":
         metrics, explanations = metric_func(args, infer_result, valid_data)

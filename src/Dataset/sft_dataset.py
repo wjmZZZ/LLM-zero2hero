@@ -26,7 +26,6 @@ class LLM_Dataset(Dataset):
         self.mode = mode
         self.tokenizer = args.tokenizer
         self.conversations: list[list] = conversations
-
         logger.info(
             f"📊 Total {mode} number of conversations: {len(self.conversations)}"
         )
@@ -113,9 +112,9 @@ class LLM_Dataset(Dataset):
             self._get_sample_encoding(system, prompt, responses)
             for idx, (system, prompt, responses) in enumerate(
                 zip(
-                    input_text_dict["systems"],
-                    input_text_dict["prompts"],
-                    input_text_dict["responses"],
+                    input_text_dict[f"{self.args.data_args.system_column}"],
+                    input_text_dict[f"{self.args.data_args.prompt_column}"],
+                    input_text_dict[f"{self.args.data_args.answer_column}"],
                 )
             )
         ]

@@ -3,7 +3,7 @@ from typing import Any
 
 from transformers import AutoTokenizer, PreTrainedTokenizer
 
-from Others.exceptions import ModelException
+from src.Others.exceptions import ModelException
 
 logger = logging.getLogger(__name__)
 
