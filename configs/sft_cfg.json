@@ -31,7 +31,7 @@
 
   
   "ModelArguments": {
-    "llm_backbone": "/slurmhome/wujm/Models/Qwen/Qwen2.5-0.5B-Instruct",
+    "llm_backbone": "Models/Qwen/Qwen2.5-0.5B-Instruct",
     "backbone_dtype":"bfloat16",
     "use_pretrained_model":true, 
     "intermediate_dropout":0.1,
@@ -57,10 +57,7 @@
   },
 
   "InferenceArguments": {
-    "metric": "AI",
-    "AI_eval_model": "Qwen/Qwen2-7B-Instruct",
-    "openai_api_key": "sk-quwxhnjeisxfotbnlcgbhyalxuiqqooducldsyssppvbxzhe",
-    "openai_base_url": "https://api.siliconflow.cn/v1",
+    "metric": "Perplexity",
     "batch_size_inference": 10,
     "distributed_inference": true
   },
