@@ -1,5 +1,13 @@
 # LLM-zero2hero🚀
 
+[English](README_EN.md) | 简体中文
+
+[![GitHub license](https://img.shields.io/github/license/wjmZZZ/LLM-zero2hero)](https://github.com/wjmZZZ/LLM-zero2hero/blob/main/LICENSE)
+[![Python Version](https://img.shields.io/badge/Python-3.11+-blue)](https://www.python.org/)
+[![GitHub stars](https://img.shields.io/github/stars/wjmZZZ/LLM-zero2hero)](https://github.com/wjmZZZ/LLM-zero2hero/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/wjmZZZ/LLM-zero2hero)](https://github.com/wjmZZZ/LLM-zero2hero/network/members)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/wjmZZZ/LLM-zero2hero/pulls)
+
 LLM-zero2hero是一个高度解耦的大语言模型(LLM)微调项目，支持自定义训练、验证和推理过程，实现全量微调和LoRA微调。
 
 ## 主要特性
