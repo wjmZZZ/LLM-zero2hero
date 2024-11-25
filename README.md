@@ -163,3 +163,8 @@ sh scripts/sft.sh -g 0,2 -n 2  # 指定使用GPU 0和2两张卡
 ## 许可证
 [Apache License 2.0](LICENSE)
 
+## Star History
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=wjmZZZ/LLM-zero2hero&type=Date)](https://star-history.com/#wjmZZZ/LLM-zero2hero&Date)
